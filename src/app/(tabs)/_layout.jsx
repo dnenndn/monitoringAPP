@@ -11,7 +11,7 @@ export default function TabLayout() {
           borderTopWidth: 0,
           paddingBottom: 10,
           paddingTop: 10,
-          height: 65,
+          height: 90,
         },
         tabBarActiveTintColor: "#FFFFFF",
         tabBarInactiveTintColor: "rgba(255, 255, 255, 0.6)",
@@ -25,35 +25,35 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name="dashboard"
+        name="dashboard/index"
         options={{
           title: "Dashboard",
           tabBarIcon: ({ color, size }) => <Factory size={24} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="kilns"
+        name="kilns/index"
         options={{
           title: "Kilns",
           tabBarIcon: ({ color, size }) => <Flame size={24} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="dryers"
+        name="dryers/index"
         options={{
           title: "Dryers",
           tabBarIcon: ({ color, size }) => <Wind size={24} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="alerts"
+        name="alerts/index"
         options={{
           title: "Alerts",
           tabBarIcon: ({ color, size }) => <Bell size={24} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="settings"
+        name="settings/index"
         options={{
           title: "Settings",
           tabBarIcon: ({ color, size }) => <Settings size={24} color={color} />,
