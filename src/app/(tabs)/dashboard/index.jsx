@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect , useCallback} from "react";
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ import {
   AlertCircle,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
+import { supabase } from "../../../utils/supabaseClient";
 
 const STATUS_COLORS = {
   firing: "#059669", // green
@@ -273,66 +274,137 @@ function EquipmentCard({ equipment, onPress }) {
 }
 
 export default function DashboardScreen() {
-  const insets = useSafeAreaInsets();
+   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
+  // local state for server-driven data
+  const [systemStatus, setSystemStatus] = useState(null);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [statusError, setStatusError] = useState(null);
 
-  // Fetch system status
-  const {
-    data: systemStatus,
-    isLoading: statusLoading,
-    error: statusError,
-  } = useQuery({
-    queryKey: ["system-status"],
-    queryFn: async () => {
-      const response = await fetch("/api/system-status");
-      if (!response.ok) {
-        throw new Error("Failed to fetch system status");
-      }
-      const data = await response.json();
-      return data.status;
-    },
-  });
+  const [equipment, setEquipment] = useState([]);
+  const [equipmentLoading, setEquipmentLoading] = useState(false);
+  const [equipmentError, setEquipmentError] = useState(null);
 
-  // Fetch equipment list with parameters
-  const {
-    data: equipment,
-    isLoading: equipmentLoading,
-    error: equipmentError,
-  } = useQuery({
-    queryKey: ["equipment"],
-    queryFn: async () => {
-      const response = await fetch("/api/equipment");
-      if (!response.ok) {
-        throw new Error("Failed to fetch equipment");
-      }
-      const data = await response.json();
+  // Fetch system status from a "system_status" table (adjust to your schema)
+  const fetchSystemStatus = useCallback(async () => {
+    setStatusLoading(true);
+    setStatusError(null);
+    try {
+      const { data, error } = await supabase
+        .from("system_status")
+        .select("*")
+        .maybeSingle();
 
-      // Fetch parameters for each equipment
-      const equipmentWithParams = await Promise.all(
-        data.equipment.map(async (eq) => {
-          try {
-            const paramResponse = await fetch(`/api/equipment/${eq.id}`);
-            if (paramResponse.ok) {
-              const paramData = await paramResponse.json();
-              return paramData.equipment;
-            }
-            return eq;
-          } catch (error) {
-            console.error(
-              `Error fetching parameters for ${eq.name}:`,
-              error
+      if (error) throw error;
+      setSystemStatus(data);
+    } catch (err) {
+      console.error("fetchSystemStatus error", err);
+      setStatusError(err);
+      setSystemStatus(null);
+    } finally {
+      setStatusLoading(false);
+    }
+  }, []);
+
+  // Fetch equipment
+  const fetchEquipment = useCallback(async () => {
+    setEquipmentLoading(true);
+    setEquipmentError(null);
+    try {
+      const { data, error } = await supabase
+        .from("equipment")
+        .select(`
+          id,
+          name,
+          type,
+          status,
+          is_active,
+          plc_parameters (
+            id,
+            equipment_id,
+            parameter_name,
+            current_value,
+            unit,
+            min_threshold,
+            max_threshold,
+            last_updated
+          )
+        `);
+     
+      if (error) throw error;
+      setEquipment(data || []);
+    } catch (err) {
+      console.error("fetchEquipment error", err);
+      setEquipmentError(err);
+      setEquipment([]);
+    } finally {
+      setEquipmentLoading(false);
+    }
+  }, []);
+
+// Initial fetch + setup real-time subscriptions
+  useEffect(() => {
+    fetchSystemStatus();
+    fetchEquipment();
+
+    // ✅ Subscribe to real-time equipment changes
+    const equipmentChannel = supabase
+      .channel("realtime-equipment")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "equipment" },
+        (payload) => {
+          console.log("Equipment change:", payload);
+
+          if (payload.eventType === "INSERT") {
+            setEquipment((prev) => [...prev, payload.new]);
+          } else if (payload.eventType === "UPDATE") {
+            setEquipment((prev) =>
+              prev.map((eq) => (eq.id === payload.new.id ? payload.new : eq))
             );
-            return eq;
+          } else if (payload.eventType === "DELETE") {
+            setEquipment((prev) =>
+              prev.filter((eq) => eq.id !== payload.old.id)
+            );
           }
-        })
-      );
+        }
+      )
+      .subscribe();
 
-      return equipmentWithParams;
-    },
-  });
+    // ✅ Subscribe to real-time parameter changes
+    const paramChannel = supabase
+      .channel("realtime-parameters")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "plc_parameters" },
+        (payload) => {
+          console.log("PLC parameter change:", payload);
 
+          if (payload.eventType === "UPDATE") {
+            setEquipment((prev) =>
+              prev.map((eq) =>
+                eq.id === payload.new.equipment_id
+                  ? {
+                      ...eq,
+                      plc_parameters: eq.plc_parameters.map((p) =>
+                        p.id === payload.new.id ? payload.new : p
+                      ),
+                    }
+                  : eq
+              )
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(equipmentChannel);
+      supabase.removeChannel(paramChannel);
+    };
+  }, [fetchSystemStatus, fetchEquipment]);
+  
   const onRefresh = async () => {
     setRefreshing(true);
     await queryClient.invalidateQueries({ queryKey: ["equipment"] });
