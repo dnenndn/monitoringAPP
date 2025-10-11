@@ -1,5 +1,6 @@
 {
 	"expo": {
+	"scheme": "monitoringapp",
     "name": "Create mobile app",
 		"version": "1.0.0",
 		"orientation": "portrait",

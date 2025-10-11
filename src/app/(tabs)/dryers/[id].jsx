@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import PropTypes from 'prop-types';
 import {
   View,
   Text,
@@ -11,6 +12,7 @@ import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "../../../utils/supabaseClient";
 import {
   ArrowLeft,
   Wind,
@@ -255,6 +257,19 @@ function ParameterCard({ parameter, onTrendPress }) {
   );
 }
 
+ParameterCard.propTypes = {
+  parameter: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    parameter_name: PropTypes.string,
+    current_value: PropTypes.number,
+    min_threshold: PropTypes.number,
+    max_threshold: PropTypes.number,
+    min_range: PropTypes.number,
+    max_range: PropTypes.number,
+    unit: PropTypes.string,
+  }).isRequired,
+  onTrendPress: PropTypes.func,
+};
 export default function DryerDetailScreen() {
   const { id } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
@@ -270,13 +285,28 @@ export default function DryerDetailScreen() {
   } = useQuery({
     queryKey: ["dryer", id],
     queryFn: async () => {
-      const response = await fetch(`/api/equipment/${id}`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch dryer details");
+     const { data, error: supaError } = await supabase
+        .from("equipment")
+        .select("*, plc_parameters(*)")
+        .eq("id", id)
+        .single();
+
+      // Log raw supabase response for debugging
+      // eslint-disable-next-line no-console
+      console.log('[dryers/[id]] supabase response', { data, supaError });
+
+      if (supaError) {
+        // Throw a clearer error so React Query exposes it to the UI
+        const errMsg = supaError.message || JSON.stringify(supaError) || 'Supabase error';
+        throw new Error(`Supabase error: ${errMsg}`);      }
+       // Normalize: map plc_parameters -> parameters for UI compatibility
+      const equipment = data || null;
+      if (equipment && Array.isArray(equipment.plc_parameters)) {
+        equipment.parameters = equipment.plc_parameters;
       }
-      const data = await response.json();
-      return data.equipment;
-    },
+
+      return equipment;    },
+enabled: !!(id && id !== 'undefined' && id !== 'null'),
   });
 
   const onRefresh = async () => {
@@ -317,6 +347,17 @@ export default function DryerDetailScreen() {
         >
           Failed to load dryer details
         </Text>
+ {error?.message ? (
+          <Text
+            style={{
+              marginTop: 8,
+              color: "#991B1B",
+              textAlign: "center",
+            }}
+          >
+            {error.message}
+          </Text>
+        ) : null}
         <TouchableOpacity
           onPress={onRefresh}
           style={{

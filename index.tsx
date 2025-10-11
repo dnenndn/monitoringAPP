@@ -1,9 +1,21 @@
-import ExceptionsManager from 'react-native/Libraries/Core/ExceptionsManager';
-
+// Avoid deep import of internal ExceptionsManager. Use global ErrorUtils when available.
 if (__DEV__) {
-  ExceptionsManager.handleException = (error, isFatal) => {
-    // no-op
-  };
+  try {
+    if (global && typeof global.ErrorUtils === 'object') {
+      // set a no-op global error handler in development to replicate previous behavior
+      if (typeof global.ErrorUtils.setGlobalHandler === 'function') {
+        global.ErrorUtils.setGlobalHandler((error: any, isFatal?: boolean) => {
+          // no-op
+        });
+      } else if (typeof global.ErrorUtils.getGlobalHandler === 'function' && typeof global.ErrorUtils.setGlobalHandler === 'function') {
+        global.ErrorUtils.setGlobalHandler((error: any, isFatal?: boolean) => {
+          // no-op
+        });
+      }
+    }
+  } catch (e) {
+    // ignore if ErrorUtils isn't present in this environment
+  }
 }
 
 import 'react-native-url-polyfill/auto';
