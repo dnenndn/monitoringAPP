@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  Image,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -466,38 +467,53 @@ export default function DashboardScreen() {
       <StatusBar style="dark" />
 
       {/* Header */}
-      <View
-        style={{
-          backgroundColor: "#FFFFFF",
-          paddingTop: insets.top + 16,
-          paddingBottom: 16,
-          paddingHorizontal: 20,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-          elevation: 3,
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 28,
-            fontWeight: "bold",
-            color: "#1F2937",
-            marginBottom: 4,
-          }}
-        >
-          Factory Monitoring
-        </Text>
-        <Text
-          style={{
-            fontSize: 16,
-            color: "#6B7280",
-          }}
-        >
-          Real-time PLC monitoring system
-        </Text>
-      </View>
+    <View
+  style={{
+    backgroundColor: "#FFFFFF",
+    paddingTop: insets.top + 16,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    flexDirection: "row",   // make children align horizontally
+    alignItems: "center",   // vertically center image and text
+  }}
+>
+  <Image
+    source={require("./factory.png")}
+    style={{
+      width: 99,
+      height: 70,
+      marginRight: 2, // space between image and text
+      borderRadius: 3,
+      marginLeft: -12,
+    }}
+  />
+  <View>
+    <Text
+      style={{
+        fontSize: 26,
+        fontWeight: "bold",
+        color: "#1F2937",
+        marginBottom: 4,
+      }}
+    >
+      IBB Factory Monitoring
+    </Text>
+    <Text
+      style={{
+        fontSize: 14,
+        color: "#6B7280",
+      }}
+    >
+      Real-time PLC monitoring system
+    </Text>
+  </View>
+</View>
+
 
       <ScrollView
         style={{ flex: 1 }}

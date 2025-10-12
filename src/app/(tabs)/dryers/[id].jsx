@@ -19,7 +19,12 @@ import {
   Activity,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
-
+const STATUS_COLORS = {
+  drying: "#059669",
+  standby: "#D97706",
+  idle: "#6B7280",
+  offline: "#DC2626",
+};
 const STATUS = {
   normal: {
     bg: "rgba(34, 197, 94, 0.1)",
@@ -54,7 +59,7 @@ export default function DryerDetailScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
-
+  
   const { data: dryer, isLoading, isError } = useQuery({
     queryKey: ["dryer", id],
     queryFn: async () => {
@@ -76,7 +81,10 @@ export default function DryerDetailScreen() {
     await queryClient.invalidateQueries(["dryer", id]);
     setRefreshing(false);
   };
-
+ const handleBack = () => {
+    Haptics.selectionAsync();
+    router.back();
+  };
   const handleTrendPress = (param) => {
     Haptics.selectionAsync();
     router.push(`/(tabs)/dryers/trend/${param.id}`);
@@ -99,41 +107,94 @@ export default function DryerDetailScreen() {
     );
   }
 
+  const statusColor = STATUS_COLORS[dryer.status] || "#6B7280";
+
   try {
     return (
       <View style={{ flex: 1, backgroundColor: "#f6f7f8" }}>
-        <StatusBar style="dark" />
-
-        {/* Header */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            backgroundColor: "#fff",
-            paddingTop: insets.top + 12,
-            paddingBottom: 12,
-            paddingHorizontal: 16,
-            shadowColor: "#000",
-            shadowOpacity: 0.05,
-            shadowRadius: 2,
-          }}
-        >
-          <TouchableOpacity onPress={() => router.back()}>
-            <ArrowLeft size={24} color="#1f2937" />
-          </TouchableOpacity>
-          <Text
-            style={{
-              flex: 1,
-              textAlign: "center",
-              fontSize: 18,
-              fontWeight: "700",
-              color: "#1f2937",
-            }}
-          >
-            {dryer?.name || "Dryer Details"}
-          </Text>
-          <View style={{ width: 24 }} />
-        </View>
+         <View
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  paddingTop: insets.top + 16,
+                  paddingBottom: 16,
+                  paddingHorizontal: 20,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 4,
+                  elevation: 3,
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 8,
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={handleBack}
+                    style={{
+                      marginRight: 16,
+                      padding: 4,
+                    }}
+                  >
+                    <ArrowLeft size={24} color="#6B7280" />
+                  </TouchableOpacity>
+        
+                  <Wind size={28} color={statusColor} />
+                  <Text
+                    style={{
+                      fontSize: 24,
+                      fontWeight: "bold",
+                      color: "#1F2937",
+                      marginLeft: 12,
+                    }}
+                  >
+                    {dryer.name}
+                  </Text>
+                </View>
+        
+                {/* Status and Last Updated */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginLeft: 44,
+                  }}
+                >
+                  <View
+                    style={{
+                      backgroundColor: statusColor + "20",
+                      borderRadius: 6,
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      marginRight: 12,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "600",
+                        color: statusColor,
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {dryer.status}
+                    </Text>
+                  </View>
+        
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: "#6B7280",
+                    }}
+                  >
+                    Updated: {new Date(dryer.updated_at).toLocaleTimeString()}
+                  </Text>
+                </View>
+              </View>
+        
 
         {/* Parameters */}
         <ScrollView
@@ -262,49 +323,7 @@ export default function DryerDetailScreen() {
           </View>
         </ScrollView>
 
-        {/* Footer Nav */}
-        <View
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: "#fff",
-            flexDirection: "row",
-            justifyContent: "space-around",
-            paddingVertical: 10,
-            borderTopWidth: 1,
-            borderTopColor: "#e5e7eb",
-          }}
-        >
-          {[
-            { label: "Dashboard", icon: "📊" },
-            { label: "Kilns", icon: "🔥" },
-            { label: "Dryers", icon: "💨", active: true },
-            { label: "Alerts", icon: "🔔" },
-            { label: "Settings", icon: "⚙️" },
-          ].map((tab, i) => (
-            <TouchableOpacity key={i} style={{ alignItems: "center" }}>
-              <Text
-                style={{
-                  fontSize: 18,
-                  opacity: tab.active ? 1 : 0.5,
-                }}
-              >
-                {tab.icon}
-              </Text>
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: tab.active ? "#1193d4" : "#6b7280",
-                  fontWeight: tab.active ? "700" : "500",
-                }}
-              >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+      
       </View>
     );
   } catch (e) {
