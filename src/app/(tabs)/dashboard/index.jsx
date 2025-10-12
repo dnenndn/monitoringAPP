@@ -276,6 +276,7 @@ function EquipmentCard({ equipment, onPress }) {
 export default function DashboardScreen() {
    const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   // local state for server-driven data
   const [systemStatus, setSystemStatus] = useState(null);

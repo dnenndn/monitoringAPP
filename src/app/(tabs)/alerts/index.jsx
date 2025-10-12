@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,19 +9,19 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+// removed unused useRouter import
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import supabase from "../../../utils/supabaseClient";
+import PropTypes from "prop-types";
 import {
   Bell,
   AlertTriangle,
   AlertCircle,
   Info,
   CheckCircle,
-  X,
   Clock,
   Flame,
   Wind,
-  Filter,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 
@@ -311,9 +311,11 @@ function FilterButton({ active, onPress, children, count }) {
 }
 
 export default function AlertsScreen() {
+  console.log('AlertsScreen');
   const insets = useSafeAreaInsets();
-  const router = useRouter();
+  // router was unused; removed to satisfy lint
   const queryClient = useQueryClient();
+  const [supabaseHealthError, setSupabaseHealthError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState("active"); // active, all, critical, warning
 
@@ -325,26 +327,76 @@ export default function AlertsScreen() {
   } = useQuery({
     queryKey: ["alerts"],
     queryFn: async () => {
-      const response = await fetch("/api/alerts");
-      if (!response.ok) {
-        throw new Error("Failed to fetch alerts");
+      // Query the `alerts` table in Supabase. Adjust selected columns if your schema differs.
+      // Select all columns to avoid errors if the schema differs from assumptions.
+      // We'll map the fields defensively below.
+      const { data: rows, error: supaError, status, statusText } = await supabase
+        .from("alerts")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      // Debug logging to help diagnose why alerts may not be returned
+      console.debug("Supabase alerts response:", { status, statusText, rows, supaError });
+
+      if (supaError) {
+        throw new Error(supaError.message || JSON.stringify(supaError));
       }
-      const data = await response.json();
-      return data.alerts;
+
+      // Debug the keys of the first row so we can inspect the actual schema in the console
+      console.debug("Supabase alerts row keys:", rows && rows.length ? Object.keys(rows[0]) : []);
+
+      // Map DB rows to the shape this component expects (use several fallbacks to handle schema differences)
+      return (rows || []).map((r) => ({
+        id: r.id ?? r.alert_id ?? r._id,
+        title: r.title ?? r.name ?? r.subject ?? "",
+        message: r.message ?? r.body ?? r.description ?? "",
+        alert_type: r.alert_type ?? r.type ?? r.level ?? "info",
+        equipment_type: r.equipment_type ?? r.equipment?.type ?? r.equipment_type ?? undefined,
+        equipment_name: r.equipment_name ?? r.equipment?.equipment_name ?? r.equipment_name ?? undefined,
+        parameter_name: r.parameter_name ?? r.parameter ?? r.param_name ?? undefined,
+        is_acknowledged: !!(r.is_acknowledged ?? r.acknowledged ?? r.acknowledged_at),
+        created_at: r.created_at ?? r.created_at_time ?? r.timestamp ?? null,
+        acknowledged_at: r.acknowledged_at ?? r.acknowledgedAt ?? r.ack_time ?? null,
+      }));
     },
     refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
   });
 
+  // Quick health check for Supabase client (helps detect missing anon key / noop client)
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await supabase.auth.getUser();
+        if (!mounted) return;
+        if (res?.error) {
+          setSupabaseHealthError(res.error.message || JSON.stringify(res.error));
+        } else {
+          setSupabaseHealthError(null);
+        }
+      } catch (err) {
+        if (!mounted) return;
+        setSupabaseHealthError(String(err));
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   // Acknowledge alert mutation
   const acknowledgeAlertMutation = useMutation({
     mutationFn: async (alertId) => {
-      const response = await fetch(`/api/alerts/${alertId}/acknowledge`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        throw new Error("Failed to acknowledge alert");
-      }
-      return response.json();
+      // Mark the alert acknowledged in Supabase
+      const { data, error: supaError } = await supabase
+        .from("alerts")
+        .update({ is_acknowledged: true, acknowledged_at: new Date().toISOString() })
+        .eq("id", alertId)
+        .select("id");
+
+      if (supaError) throw new Error(supaError.message || JSON.stringify(supaError));
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["alerts"] });
@@ -414,6 +466,14 @@ export default function AlertsScreen() {
         >
           Failed to load alerts
         </Text>
+        <Text style={{ marginTop: 12, color: '#6B7280', textAlign: 'center' }}>{error?.message || String(error)}</Text>
+
+        {supabaseHealthError && (
+          <Text style={{ marginTop: 8, color: '#92400E', textAlign: 'center' }}>
+            Supabase: {supabaseHealthError}
+          </Text>
+        )}
+
         <TouchableOpacity
           onPress={onRefresh}
           style={{
@@ -510,7 +570,7 @@ export default function AlertsScreen() {
             }}
             count={alertCounts.active}
           >
-            Active
+            <Text>Active</Text>
           </FilterButton>
           
           <FilterButton
@@ -521,7 +581,7 @@ export default function AlertsScreen() {
             }}
             count={alertCounts.critical}
           >
-            Critical
+            <Text>Critical</Text>
           </FilterButton>
           
           <FilterButton
@@ -532,7 +592,7 @@ export default function AlertsScreen() {
             }}
             count={alertCounts.warning}
           >
-            Warning
+            <Text>Warning</Text>
           </FilterButton>
           
           <FilterButton
@@ -543,7 +603,7 @@ export default function AlertsScreen() {
             }}
             count={alertCounts.all}
           >
-            All
+            <Text>All</Text>
           </FilterButton>
         </ScrollView>
       </View>
@@ -601,30 +661,40 @@ export default function AlertsScreen() {
               }}
             >
               <CheckCircle size={48} color="#059669" />
-              <Text
-                style={{
-                  fontSize: 18,
-                  fontWeight: "600",
-                  color: "#374151",
-                  marginTop: 12,
-                  textAlign: "center",
-                }}
-              >
-                {filter === "active" ? "No Active Alerts" : `No ${filter === "all" ? "" : filter.charAt(0).toUpperCase() + filter.slice(1)} Alerts`}
-              </Text>
-              <Text
-                style={{
-                  fontSize: 14,
-                  color: "#6B7280",
-                  textAlign: "center",
-                  marginTop: 8,
-                }}
-              >
-                {filter === "active" 
-                  ? "All systems are operating normally"
-                  : `No ${filter === "all" ? "" : filter} alerts found`
-                }
-              </Text>
+              {(() => {
+                // Avoid nested ternary expressions by computing components separately
+                const formattedFilterTitle = filter === "all" ? "" : filter.charAt(0).toUpperCase() + filter.slice(1);
+                const formattedFilterLower = filter === "all" ? "" : filter;
+
+                const title = filter === "active" ? "No Active Alerts" : `No ${formattedFilterTitle} Alerts`;
+                const subtitle = filter === "active" ? "All systems are operating normally" : `No ${formattedFilterLower} alerts found`;
+
+                return (
+                  <>
+                    <Text
+                      style={{
+                        fontSize: 18,
+                        fontWeight: "600",
+                        color: "#374151",
+                        marginTop: 12,
+                        textAlign: "center",
+                      }}
+                    >
+                      {title}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        color: "#6B7280",
+                        textAlign: "center",
+                        marginTop: 8,
+                      }}
+                    >
+                      {subtitle}
+                    </Text>
+                  </>
+                );
+              })()}
             </View>
           )
         )}
@@ -632,3 +702,26 @@ export default function AlertsScreen() {
     </View>
   );
 }
+
+AlertCard.propTypes = {
+  alert: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    title: PropTypes.string,
+    message: PropTypes.string,
+    alert_type: PropTypes.string,
+    equipment_type: PropTypes.string,
+    equipment_name: PropTypes.string,
+    parameter_name: PropTypes.string,
+    is_acknowledged: PropTypes.bool,
+    created_at: PropTypes.oneOfType([PropTypes.string, PropTypes.instanceOf(Date)]),
+    acknowledged_at: PropTypes.oneOfType([PropTypes.string, PropTypes.instanceOf(Date)]),
+  }).isRequired,
+  onAcknowledge: PropTypes.func.isRequired,
+};
+
+FilterButton.propTypes = {
+  active: PropTypes.bool,
+  onPress: PropTypes.func,
+  children: PropTypes.node,
+  count: PropTypes.number,
+};
