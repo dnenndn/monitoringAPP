@@ -1,35 +1,39 @@
 import { Tabs } from "expo-router";
 import { Factory, Flame, Wind, Bell, Settings } from "lucide-react-native";
 
-// Move tab bar icon renderers to module scope to avoid inline component definitions
-const DashboardIcon = ({ color, size }) => <Factory size={24} color={color} />;
-const KilnsIcon = ({ color, size }) => <Flame size={24} color={color} />;
-const DryersIcon = ({ color, size }) => <Wind size={24} color={color} />;
-const AlertsIcon = ({ color, size }) => <Bell size={24} color={color} />;
-const SettingsIcon = ({ color, size }) => <Settings size={24} color={color} />;
+import { View, Text } from "react-native";
 
-// PropTypes for the small icon components
-import PropTypes from 'prop-types';
-DashboardIcon.propTypes = { color: PropTypes.string, size: PropTypes.number };
-KilnsIcon.propTypes = { color: PropTypes.string, size: PropTypes.number };
-DryersIcon.propTypes = { color: PropTypes.string, size: PropTypes.number };
-AlertsIcon.propTypes = { color: PropTypes.string, size: PropTypes.number };
-SettingsIcon.propTypes = { color: PropTypes.string, size: PropTypes.number };
-
+// Reusable Tab icon component
+function TabIcon({ icon, label, focused }) {
+  return (
+    <View style={{ alignItems: "center", gap: 2 }}>
+      <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>{icon}</Text>
+      <Text
+        style={{
+          fontSize: 12,
+          color: focused ? "#1193d4" : "#6b7280",
+          fontWeight: focused ? "700" : "500",
+        }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: "#2563EB",
+          backgroundColor: "#f1ebeaff",
           borderTopWidth: 0,
-          paddingBottom: 10,
+          paddingBottom: 0,
           paddingTop: 10,
-          height: 90,
+          height: 70,
         },
-        tabBarActiveTintColor: "#FFFFFF",
-        tabBarInactiveTintColor: "rgba(255, 255, 255, 0.6)",
+        tabBarActiveTintColor: "#000000ff",
+        tabBarInactiveTintColor: "rgba(0, 0, 0, 0.6)",
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: "500",
@@ -43,35 +47,45 @@ export default function TabLayout() {
         name="dashboard/index"
         options={{
           title: "Dashboard",
-          tabBarIcon: DashboardIcon,
+           tabBarIcon: ({ focused }) => (
+            <TabIcon icon="📊"  focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="kilns/index"
         options={{
           title: "Kilns",
-          tabBarIcon: KilnsIcon,
+           tabBarIcon: ({ focused }) => (
+            <TabIcon icon="🔥" focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="dryers/index"
         options={{
           title: "Dryers",
-          tabBarIcon: DryersIcon,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon icon="💨"  focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="alerts/index"
         options={{
           title: "Alerts",
-          tabBarIcon: AlertsIcon,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon icon="🔔"  focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="settings/index"
         options={{
           title: "Settings",
-          tabBarIcon: SettingsIcon,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon icon="⚙️"  focused={focused} />
+          ),
         }}
       />
 
