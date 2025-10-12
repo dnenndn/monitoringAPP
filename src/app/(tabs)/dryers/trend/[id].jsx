@@ -11,7 +11,7 @@ import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LineGraph } from "react-native-graph";
+
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   ArrowLeft,
@@ -26,6 +26,7 @@ import {
   Minus,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
+import { supabase } from "../../../../utils/supabaseClient";
 
 const TIME_PERIODS = [
   { label: "1H", hours: 1 },
@@ -100,6 +101,27 @@ export default function DryerTrendScreen() {
   const windowWidth = Dimensions.get("window").width;
   const graphWidth = windowWidth - 40;
 
+  // Guarded dynamic requires for native modules
+  let LineGraphComp = null;
+  let GestureHandlerRootViewComp = null;
+  try {
+    // eslint-disable-next-line global-require
+    const _lg = require('react-native-graph');
+    LineGraphComp = _lg?.LineGraph ?? null;
+  } catch {
+    LineGraphComp = null;
+  }
+
+  try {
+    // eslint-disable-next-line global-require
+    const _gh = require('react-native-gesture-handler');
+    GestureHandlerRootViewComp = _gh?.GestureHandlerRootView ?? null;
+  } catch {
+    GestureHandlerRootViewComp = null;
+  }
+
+  const Wrapper = GestureHandlerRootViewComp || View;
+
   // Fetch parameter details
   const {
     data: parameter,
@@ -108,11 +130,28 @@ export default function DryerTrendScreen() {
   } = useQuery({
     queryKey: ["parameter", id],
     queryFn: async () => {
-      const response = await fetch(`/api/parameters/${id}`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch parameter details");
+      // Try reading parameter directly from Supabase
+      // eslint-disable-next-line no-console
+      console.log('[dryers/trend] fetching parameter via supabase for id=', id);
+      try {
+        const { data, error: supaError } = await supabase
+          .from('plc_parameters')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle();
+
+        // eslint-disable-next-line no-console
+        console.log('[dryers/trend] supabase parameter response', { data, supaError });
+
+        if (supaError) throw supaError;
+        if (data) return data;
+      } catch (err) {
+        // If Supabase direct query fails (table missing or auth), fall back to API
+        // eslint-disable-next-line no-console
+        console.warn('[dryers/trend] supabase parameter fetch failed, falling back to /api', err?.message || err);
       }
-      const data = await response.json();
+
+   
       return data.parameter;
     },
   });
@@ -125,15 +164,35 @@ export default function DryerTrendScreen() {
   } = useQuery({
     queryKey: ["parameter-history", id, selectedPeriod.hours],
     queryFn: async () => {
-      const response = await fetch(`/api/parameters/${id}/history?hours=${selectedPeriod.hours}`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch parameter history");
+      // Attempt to read history from a conventional Supabase time-series table.
+      // Common names: plc_parameter_history, plc_samples, parameter_history. We'll try one and
+      // fall back to the server API if the query fails.
+      // eslint-disable-next-line no-console
+      console.log('[dryers/trend] fetching history via supabase for id=', id, 'hours=', selectedPeriod.hours);
+
+      const since = new Date(Date.now() - selectedPeriod.hours * 3600 * 1000).toISOString();
+
+      try {
+        const { data, error: supaError } = await supabase
+          .from('parameter_history')
+          .select('timestamp, value')
+          .eq('parameter_id', id)
+          .gte('timestamp', since)
+          .order('timestamp', { ascending: true });
+
+        // eslint-disable-next-line no-console
+        console.log('[dryers/trend] supabase history response', { data, supaError });
+
+        if (!supaError && Array.isArray(data)) {
+          return data.map(point => ({ date: new Date(point.timestamp), value: parseFloat(point.value) }));
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[dryers/trend] supabase history fetch failed, falling back to /api', err?.message || err);
       }
-      const data = await response.json();
-      return data.history.map(point => ({
-        date: new Date(point.timestamp),
-        value: parseFloat(point.value)
-      }));
+
+      
+      return data.history.map(point => ({ date: new Date(point.timestamp), value: parseFloat(point.value) }));
     },
     enabled: !!parameter,
   });
@@ -228,7 +287,7 @@ export default function DryerTrendScreen() {
   const TrendIcon = trend.icon;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <Wrapper style={{ flex: 1 }}>
       <View style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
         <StatusBar style="dark" />
 
@@ -505,19 +564,8 @@ export default function DryerTrendScreen() {
                   xLength={historyData.length}
                   height={250}
                   width={graphWidth}
-                  TopAxisLabel={({ value }) => (
-                    <Text style={{ fontSize: 12, color: "#6B7280", textAlign: "center" }}>
-                      {value.toFixed(1)} {parameter?.unit}
-                    </Text>
-                  )}
-                  BottomAxisLabel={({ value }) => (
-                    <Text style={{ fontSize: 12, color: "#6B7280", textAlign: "center" }}>
-                      {new Date(value).toLocaleTimeString([], { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                      })}
-                    </Text>
-                  )}
+                    /* Removed inline TopAxisLabel/BottomAxisLabel to avoid inline component
+                       definitions and lint/runtime warnings in some environments. */
                 />
               </View>
             ) : (
@@ -606,6 +654,6 @@ export default function DryerTrendScreen() {
           )}
         </ScrollView>
       </View>
-    </GestureHandlerRootView>
+    </Wrapper>
   );
 }

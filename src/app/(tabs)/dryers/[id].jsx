@@ -1,12 +1,10 @@
 import React, { useState } from "react";
-import PropTypes from 'prop-types';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  Alert,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,260 +14,40 @@ import { supabase } from "../../../utils/supabaseClient";
 import {
   ArrowLeft,
   Wind,
-  Activity,
-  Thermometer,
-  Droplets,
   Gauge,
-  AlertTriangle,
-  TrendingUp,
-  Settings,
-  BarChart3,
+  Droplets,
+  Activity,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 
-const STATUS_COLORS = {
-  drying: "#059669",
-  standby: "#D97706",
-  idle: "#6B7280",
-  offline: "#DC2626",
+const STATUS = {
+  normal: {
+    bg: "rgba(34, 197, 94, 0.1)",
+    border: "rgba(34, 197, 94, 0.3)",
+    glow: "rgba(34, 197, 94, 0.4)",
+    color: "#22c55e",
+  },
+  warning: {
+    bg: "rgba(249, 115, 22, 0.1)",
+    border: "rgba(249, 115, 22, 0.3)",
+    glow: "rgba(249, 115, 22, 0.4)",
+    color: "#f97316",
+  },
+  critical: {
+    bg: "rgba(239, 68, 68, 0.1)",
+    border: "rgba(239, 68, 68, 0.3)",
+    glow: "rgba(239, 68, 68, 0.4)",
+    color: "#ef4444",
+  },
 };
 
-function getParameterIcon(paramName) {
-  const name = paramName.toLowerCase();
-  if (name.includes("temp")) return Thermometer;
-  if (name.includes("humidity")) return Droplets;
-  if (name.includes("fan") || name.includes("speed")) return Wind;
-  if (name.includes("pressure") || name.includes("valve")) return Gauge;
-  return Activity;
-}
-
-function getParameterStatus(value, min, max) {
-  if (value < min || value > max) {
-    return {
-      color: "#DC2626",
-      label: "CRITICAL",
-      bg: "#FEE2E2",
-    };
-  }
-  if (value < min + (max - min) * 0.1 || value > max - (max - min) * 0.1) {
-    return {
-      color: "#D97706",
-      label: "WARNING",
-      bg: "#FEF3C7",
-    };
-  }
-  return {
-    color: "#059669",
-    label: "NORMAL",
-    bg: "#D1FAE5",
-  };
-}
-
-function ParameterCard({ parameter, onTrendPress }) {
-  const Icon = getParameterIcon(parameter.parameter_name);
-  const status = getParameterStatus(
-    parameter.current_value,
-    parameter.min_threshold,
-    parameter.max_threshold,
-  );
-
-  const progressPercentage = Math.min(
-    Math.max(
-      ((parameter.current_value - parameter.min_range) /
-        (parameter.max_range - parameter.min_range)) *
-        100,
-      0,
-    ),
-    100,
-  );
-
-  return (
-    <TouchableOpacity
-      onPress={() => onTrendPress(parameter)}
-      style={{
-        backgroundColor: "#FFFFFF",
-        borderRadius: 16,
-        padding: 20,
-        marginBottom: 16,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-        borderLeftWidth: 4,
-        borderLeftColor: status.color,
-      }}
-    >
-      {/* Header */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: 16,
-        }}
-      >
-        <View style={{ flex: 1 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              marginBottom: 8,
-            }}
-          >
-            <Icon size={18} color="#6B7280" />
-            <Text
-              style={{
-                fontSize: 16,
-                fontWeight: "600",
-                color: "#1F2937",
-                marginLeft: 8,
-              }}
-            >
-              {parameter.parameter_name}
-            </Text>
-          </View>
-
-          {/* Current Value */}
-          <Text
-            style={{
-              fontSize: 32,
-              fontWeight: "bold",
-              color: status.color,
-              marginBottom: 4,
-            }}
-          >
-            {parameter.current_value}
-            <Text style={{ fontSize: 20, color: "#6B7280" }}>
-              {" "}
-              {parameter.unit}
-            </Text>
-          </Text>
-
-          {/* Status Badge */}
-          <View
-            style={{
-              backgroundColor: status.bg,
-              borderRadius: 6,
-              paddingHorizontal: 8,
-              paddingVertical: 4,
-              alignSelf: "flex-start",
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "600",
-                color: status.color,
-              }}
-            >
-              {status.label}
-            </Text>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          onPress={() => onTrendPress(parameter)}
-          style={{
-            backgroundColor: "#F3F4F6",
-            borderRadius: 8,
-            padding: 8,
-          }}
-        >
-          <BarChart3 size={20} color="#6B7280" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Range Bar */}
-      <View style={{ marginBottom: 12 }}>
-        <View
-          style={{
-            height: 6,
-            backgroundColor: "#F3F4F6",
-            borderRadius: 3,
-            position: "relative",
-          }}
-        >
-          {/* Progress fill */}
-          <View
-            style={{
-              position: "absolute",
-              left: 0,
-              top: 0,
-              height: 6,
-              width: `${progressPercentage}%`,
-              backgroundColor: status.color,
-              borderRadius: 3,
-            }}
-          />
-
-          {/* Threshold markers */}
-          <View
-            style={{
-              position: "absolute",
-              left: `${
-                ((parameter.min_threshold - parameter.min_range) /
-                  (parameter.max_range - parameter.min_range)) *
-                100
-              }%`,
-              top: -2,
-              width: 2,
-              height: 10,
-              backgroundColor: "#DC2626",
-            }}
-          />
-          <View
-            style={{
-              position: "absolute",
-              left: `${
-                ((parameter.max_threshold - parameter.min_range) /
-                  (parameter.max_range - parameter.min_range)) *
-                100
-              }%`,
-              top: -2,
-              width: 2,
-              height: 10,
-              backgroundColor: "#DC2626",
-            }}
-          />
-        </View>
-
-        {/* Range Labels */}
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            marginTop: 8,
-          }}
-        >
-          <Text style={{ fontSize: 12, color: "#6B7280" }}>
-            {parameter.min_range} {parameter.unit}
-          </Text>
-          <Text style={{ fontSize: 12, color: "#6B7280" }}>
-            Thresholds: {parameter.min_threshold} - {parameter.max_threshold}
-          </Text>
-          <Text style={{ fontSize: 12, color: "#6B7280" }}>
-            {parameter.max_range} {parameter.unit}
-          </Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-ParameterCard.propTypes = {
-  parameter: PropTypes.shape({
-    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
-    parameter_name: PropTypes.string,
-    current_value: PropTypes.number,
-    min_threshold: PropTypes.number,
-    max_threshold: PropTypes.number,
-    min_range: PropTypes.number,
-    max_range: PropTypes.number,
-    unit: PropTypes.string,
-  }).isRequired,
-  onTrendPress: PropTypes.func,
+const getStatus = (val, min, max) => {
+  if (val < min || val > max) return STATUS.critical;
+  if (val < min + (max - min) * 0.1 || val > max - (max - min) * 0.1)
+    return STATUS.warning;
+  return STATUS.normal;
 };
+
 export default function DryerDetailScreen() {
   const { id } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
@@ -277,285 +55,264 @@ export default function DryerDetailScreen() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
 
-  // Fetch dryer details
-  const {
-    data: dryer,
-    isLoading,
-    error,
-  } = useQuery({
+  const { data: dryer, isLoading, isError } = useQuery({
     queryKey: ["dryer", id],
     queryFn: async () => {
-     const { data, error: supaError } = await supabase
+      const { data } = await supabase
         .from("equipment")
         .select("*, plc_parameters(*)")
         .eq("id", id)
         .single();
-
-      // Log raw supabase response for debugging
-      // eslint-disable-next-line no-console
-      console.log('[dryers/[id]] supabase response', { data, supaError });
-
-      if (supaError) {
-        // Throw a clearer error so React Query exposes it to the UI
-        const errMsg = supaError.message || JSON.stringify(supaError) || 'Supabase error';
-        throw new Error(`Supabase error: ${errMsg}`);      }
-       // Normalize: map plc_parameters -> parameters for UI compatibility
-      const equipment = data || null;
-      if (equipment && Array.isArray(equipment.plc_parameters)) {
-        equipment.parameters = equipment.plc_parameters;
+      if (data && Array.isArray(data.plc_parameters)) {
+        data.parameters = data.plc_parameters;
       }
-
-      return equipment;    },
-enabled: !!(id && id !== 'undefined' && id !== 'null'),
+      return data;
+    },
+    enabled: !!id,
   });
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ["dryer", id] });
+    await queryClient.invalidateQueries(["dryer", id]);
     setRefreshing(false);
   };
 
-  const handleTrendPress = (parameter) => {
+  const handleTrendPress = (param) => {
     Haptics.selectionAsync();
-    router.push(`/(tabs)/dryers/trend/${parameter.id}`);
+    router.push(`/(tabs)/dryers/trend/${param.id}`);
   };
 
-  const handleBack = () => {
-    Haptics.selectionAsync();
-    router.back();
-  };
-
-  if (error) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          padding: 20,
-        }}
-      >
-        <AlertTriangle size={48} color="#DC2626" />
-        <Text
-          style={{
-            fontSize: 18,
-            fontWeight: "600",
-            color: "#DC2626",
-            marginTop: 12,
-            textAlign: "center",
-          }}
-        >
-          Failed to load dryer details
-        </Text>
- {error?.message ? (
-          <Text
-            style={{
-              marginTop: 8,
-              color: "#991B1B",
-              textAlign: "center",
-            }}
-          >
-            {error.message}
-          </Text>
-        ) : null}
-        <TouchableOpacity
-          onPress={onRefresh}
-          style={{
-            backgroundColor: "#2563EB",
-            borderRadius: 8,
-            paddingHorizontal: 16,
-            paddingVertical: 8,
-            marginTop: 16,
-          }}
-        >
-          <Text style={{ color: "#FFFFFF", fontWeight: "600" }}>Try Again</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
+  // 🧱 Loading or Error State
   if (isLoading) {
     return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: "#F9FAFB",
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 16,
-            color: "#6B7280",
-            textAlign: "center",
-          }}
-        >
-          Loading dryer details...
-        </Text>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <Text>Loading dryer data...</Text>
       </View>
     );
   }
 
-  const statusColor = STATUS_COLORS[dryer.status] || "#6B7280";
+  if (isError || !dryer) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <Text>Error loading dryer data.</Text>
+      </View>
+    );
+  }
 
-  return (
-    <View style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
-      <StatusBar style="dark" />
+  try {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#f6f7f8" }}>
+        <StatusBar style="dark" />
 
-      {/* Header */}
-      <View
-        style={{
-          backgroundColor: "#FFFFFF",
-          paddingTop: insets.top + 16,
-          paddingBottom: 16,
-          paddingHorizontal: 20,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-          elevation: 3,
-        }}
-      >
+        {/* Header */}
         <View
           style={{
             flexDirection: "row",
             alignItems: "center",
-            marginBottom: 8,
+            backgroundColor: "#fff",
+            paddingTop: insets.top + 12,
+            paddingBottom: 12,
+            paddingHorizontal: 16,
+            shadowColor: "#000",
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
           }}
         >
-          <TouchableOpacity
-            onPress={handleBack}
-            style={{
-              marginRight: 16,
-              padding: 4,
-            }}
-          >
-            <ArrowLeft size={24} color="#6B7280" />
+          <TouchableOpacity onPress={() => router.back()}>
+            <ArrowLeft size={24} color="#1f2937" />
           </TouchableOpacity>
-
-          <Wind size={28} color={statusColor} />
           <Text
             style={{
-              fontSize: 24,
-              fontWeight: "bold",
-              color: "#1F2937",
-              marginLeft: 12,
+              flex: 1,
+              textAlign: "center",
+              fontSize: 18,
+              fontWeight: "700",
+              color: "#1f2937",
             }}
           >
-            {dryer.name}
+            {dryer?.name || "Dryer Details"}
           </Text>
+          <View style={{ width: 24 }} />
         </View>
 
-        {/* Status and Last Updated */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginLeft: 44,
+        {/* Parameters */}
+        <ScrollView
+          contentContainerStyle={{
+            padding: 16,
+            paddingBottom: insets.bottom + 100,
           }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
         >
           <View
             style={{
-              backgroundColor: statusColor + "20",
-              borderRadius: 6,
-              paddingHorizontal: 8,
-              paddingVertical: 4,
-              marginRight: 12,
+              flexDirection: "row",
+              flexWrap: "wrap",
+              justifyContent: "space-between",
             }}
           >
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "600",
-                color: statusColor,
-                textTransform: "uppercase",
-              }}
-            >
-              {dryer.status}
-            </Text>
-          </View>
+            {dryer?.parameters?.map((param) => {
+              console.log("Param:", param); // 🧭 Debug log
 
-          <Text
-            style={{
-              fontSize: 12,
-              color: "#6B7280",
-            }}
-          >
-            Updated: {new Date(dryer.updated_at).toLocaleTimeString()}
-          </Text>
+              const currentValue =
+                typeof param.current_value === "object"
+                  ? JSON.stringify(param.current_value)
+                  : param.current_value ?? "N/A";
+
+              const s = getStatus(
+                Number(param.current_value) || 0,
+                param.min_threshold,
+                param.max_threshold
+              );
+
+              const Icon =
+                param.parameter_name?.toLowerCase().includes("temp")
+                  ? Wind
+                  : param.parameter_name?.toLowerCase().includes("humidity")
+                  ? Droplets
+                  : param.parameter_name?.toLowerCase().includes("pressure")
+                  ? Gauge
+                  : Activity;
+
+              const percent =
+                ((Number(param.current_value) - param.min_range) /
+                  (param.max_range - param.min_range)) *
+                100;
+
+              return (
+                <TouchableOpacity
+                  key={param.id}
+                  onPress={() => handleTrendPress(param)}
+                  style={{
+                    width: "48%",
+                    backgroundColor: s.bg,
+                    borderColor: s.border,
+                    borderWidth: 1,
+                    borderRadius: 16,
+                    padding: 12,
+                    marginBottom: 12,
+                    shadowColor: s.glow,
+                    shadowOpacity: 1,
+                    shadowRadius: 6,
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <Icon size={16} color={s.color} />
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        flex: 1,
+                        marginLeft: 6,
+                        fontWeight: "600",
+                        color: "#1f2937",
+                        fontSize: 13,
+                      }}
+                    >
+                      {param.parameter_name || "Unnamed Param"}
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={{
+                      textAlign: "center",
+                      fontSize: 28,
+                      fontWeight: "700",
+                      color: s.color,
+                      marginVertical: 6,
+                    }}
+                  >
+                    {currentValue}
+                    <Text style={{ fontSize: 16, color: "#6b7280" }}>
+                      {" "}
+                      {param.unit}
+                    </Text>
+                  </Text>
+
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      color: "#6b7280",
+                      textAlign: "center",
+                      marginBottom: 4,
+                    }}
+                  >
+                    Range: {param.min_range}-{param.max_range} {param.unit}
+                  </Text>
+
+                  <View
+                    style={{
+                      height: 6,
+                      backgroundColor: "#e5e7eb",
+                      borderRadius: 3,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: `${Math.max(0, Math.min(percent, 100))}%`,
+                        height: 6,
+                        backgroundColor: s.color,
+                      }}
+                    />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
+
+        {/* Footer Nav */}
+        <View
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: "#fff",
+            flexDirection: "row",
+            justifyContent: "space-around",
+            paddingVertical: 10,
+            borderTopWidth: 1,
+            borderTopColor: "#e5e7eb",
+          }}
+        >
+          {[
+            { label: "Dashboard", icon: "📊" },
+            { label: "Kilns", icon: "🔥" },
+            { label: "Dryers", icon: "💨", active: true },
+            { label: "Alerts", icon: "🔔" },
+            { label: "Settings", icon: "⚙️" },
+          ].map((tab, i) => (
+            <TouchableOpacity key={i} style={{ alignItems: "center" }}>
+              <Text
+                style={{
+                  fontSize: 18,
+                  opacity: tab.active ? 1 : 0.5,
+                }}
+              >
+                {tab.icon}
+              </Text>
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: tab.active ? "#1193d4" : "#6b7280",
+                  fontWeight: tab.active ? "700" : "500",
+                }}
+              >
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
-
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          padding: 20,
-          paddingBottom: insets.bottom + 80,
-        }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#2563EB"
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Parameters List */}
-        {dryer.parameters && dryer.parameters.length > 0 ? (
-          <View>
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: "600",
-                color: "#1F2937",
-                marginBottom: 16,
-              }}
-            >
-              PLC Data Parameters
-            </Text>
-
-            {dryer.parameters.map((parameter) => (
-              <ParameterCard
-                key={parameter.id}
-                parameter={parameter}
-                onTrendPress={handleTrendPress}
-              />
-            ))}
-          </View>
-        ) : (
-          <View
-            style={{
-              padding: 40,
-              alignItems: "center",
-            }}
-          >
-            <Activity size={48} color="#6B7280" />
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: "600",
-                color: "#374151",
-                marginTop: 12,
-                textAlign: "center",
-              }}
-            >
-              No Parameters Configured
-            </Text>
-            <Text
-              style={{
-                fontSize: 14,
-                color: "#6B7280",
-                textAlign: "center",
-                marginTop: 8,
-              }}
-            >
-              No PLC parameters are configured for this dryer
-            </Text>
-          </View>
-        )}
-      </ScrollView>
-    </View>
-  );
+    );
+  } catch (e) {
+    console.error("Render error:", e);
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <Text>Error rendering DryerDetailScreen.</Text>
+      </View>
+    );
+  }
 }

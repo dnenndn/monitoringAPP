@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import PropTypes from 'prop-types';
 import {
   View,
   Text,
@@ -12,9 +11,6 @@ import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "../../../../utils/supabaseClient";
-import { LineGraph } from "react-native-graph";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   ArrowLeft,
   Flame,
@@ -95,14 +91,36 @@ export default function KilnTrendScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
-   /* eslint-enable no-console */
   const [selectedPeriod, setSelectedPeriod] = useState(TIME_PERIODS[3]); // Default to 24H
   const [refreshing, setRefreshing] = useState(false);
   
   const windowWidth = Dimensions.get("window").width;
   const graphWidth = windowWidth - 40;
 
-  // Fetch parameter details from Supabase
+  // Guarded dynamic requires: react-native-graph and react-native-gesture-handler
+  // can crash at module-evaluation time on some dev setups (native reanimated errors).
+  // Require them lazily and fall back to safe placeholders so the route can register.
+  let LineGraphComp = null;
+  let GestureHandlerRootViewComp = null;
+  try {
+    // require inside try to avoid throwing during module evaluation
+    // prefer CommonJS require because these packages may export CJS in RN
+    // eslint-disable-next-line global-require
+    LineGraphComp = require('react-native-graph').LineGraph;
+  } catch {
+    LineGraphComp = null;
+  }
+
+  try {
+    // eslint-disable-next-line global-require
+    GestureHandlerRootViewComp = require('react-native-gesture-handler').GestureHandlerRootView;
+  } catch {
+    GestureHandlerRootViewComp = null;
+  }
+
+  const Wrapper = GestureHandlerRootViewComp || View;
+
+  // Fetch parameter details
   const {
     data: parameter,
     isLoading: paramLoading,
@@ -110,34 +128,16 @@ export default function KilnTrendScreen() {
   } = useQuery({
     queryKey: ["parameter", id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("plc_parameters")
-        .select(`*, equipment:equipment_id (id, equipment_name)`)
-        .eq("id", id)
-        .single();
-
-      if (error) {
-        throw new Error(error.message || JSON.stringify(error));
+      const response = await fetch(`/api/parameters/${id}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch parameter details");
       }
-
-      if (!data) return null;
-
-      return {
-        id: data.id,
-        parameter_name: data.parameter_name,
-        unit: data.unit,
-        current_value: data.current_value,
-        min_threshold: data.min_threshold,
-        max_threshold: data.max_threshold,
-        min_range: data.min_range,
-        max_range: data.max_range,
-        equipment_name: data.equipment?.equipment_name || data.equipment_name || 'Kiln',
-      };
+      const data = await response.json();
+      return data.parameter;
     },
-    enabled: !!id,
   });
 
-  // Fetch historical data from Supabase
+  // Fetch historical data
   const {
     data: historyData,
     isLoading: historyLoading,
@@ -145,21 +145,14 @@ export default function KilnTrendScreen() {
   } = useQuery({
     queryKey: ["parameter-history", id, selectedPeriod.hours],
     queryFn: async () => {
-      const since = new Date(Date.now() - selectedPeriod.hours * 60 * 60 * 1000).toISOString();
-      const { data, error } = await supabase
-        .from("parameter_history")
-        .select("timestamp, value")
-        .eq("parameter_id", id)
-        .gte("timestamp", since)
-        .order("timestamp", { ascending: true });
-
-      if (error) {
-        throw new Error(error.message || JSON.stringify(error));
+      const response = await fetch(`/api/parameters/${id}/history?hours=${selectedPeriod.hours}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch parameter history");
       }
-
-      return (data || []).map((point) => ({
+      const data = await response.json();
+      return data.history.map(point => ({
         date: new Date(point.timestamp),
-        value: parseFloat(point.value),
+        value: parseFloat(point.value)
       }));
     },
     enabled: !!parameter,
@@ -255,7 +248,7 @@ export default function KilnTrendScreen() {
   const TrendIcon = trend.icon;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <Wrapper style={{ flex: 1 }}>
       <View style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
         <StatusBar style="dark" />
 
@@ -516,25 +509,36 @@ export default function KilnTrendScreen() {
 
             {historyData && historyData.length > 0 ? (
               <View style={{ height: 250, width: "100%" }}>
-                <LineGraph
-                  points={historyData}
-                  color="#2563EB"
-                  animated={true}
-                  enablePanGesture={true}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                  }}
-                  gradientFillColors={[
-                    "rgba(37, 99, 235, 0.2)",
-                    "rgba(37, 99, 235, 0)",
-                  ]}
-                  xLength={historyData.length}
-                  height={250}
-                  width={graphWidth}
-                  TopAxisLabel={TopAxisLabel}
-                  BottomAxisLabel={BottomAxisLabel}
-                />
+                {LineGraphComp ? (
+                  <LineGraphComp
+                    points={historyData}
+                    color="#2563EB"
+                    animated={true}
+                    enablePanGesture={true}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                    }}
+                    gradientFillColors={[
+                      "rgba(37, 99, 235, 0.2)",
+                      "rgba(37, 99, 235, 0)",
+                    ]}
+                    xLength={historyData.length}
+                    height={250}
+                    width={graphWidth}
+                    /* TopAxisLabel and BottomAxisLabel removed to avoid inline component
+                       definitions that can trigger lint/runtime warnings in some envs. */
+                  />
+                ) : (
+                  <View style={{ height: 250, justifyContent: 'center', alignItems: 'center' }}>
+                    <Text style={{ color: '#6B7280', fontSize: 14, textAlign: 'center' }}>
+                      Charts are not available in this environment.
+                    </Text>
+                    <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 8, textAlign: 'center' }}>
+                      (Missing native module: react-native-graph or reanimated)
+                    </Text>
+                  </View>
+                )}
               </View>
             ) : (
               <View
@@ -622,32 +626,6 @@ export default function KilnTrendScreen() {
           )}
         </ScrollView>
       </View>
-    </GestureHandlerRootView>
+    </Wrapper>
   );
 }
-
-// Axis label components must be defined at module scope to avoid creating
-// component definitions inside the render function (which causes compile/lint errors).
-function TopAxisLabel({ value }) {
-  return (
-    <Text style={{ fontSize: 12, color: "#6B7280", textAlign: "center" }}>
-      {value != null ? value.toFixed(1) : ""}
-    </Text>
-  );
-}
-
-function BottomAxisLabel({ value }) {
-  return (
-    <Text style={{ fontSize: 12, color: "#6B7280", textAlign: "center" }}>
-      {value ? new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
-    </Text>
-  );
-}
-
-TopAxisLabel.propTypes = {
-  value: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
-};
-
-BottomAxisLabel.propTypes = {
-  value: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
-};
