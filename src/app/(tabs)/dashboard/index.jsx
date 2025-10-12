@@ -300,7 +300,6 @@ export default function DashboardScreen() {
       if (error) throw error;
       setSystemStatus(data);
     } catch (err) {
-      console.error("fetchSystemStatus error", err);
       setStatusError(err);
       setSystemStatus(null);
     } finally {
@@ -336,7 +335,6 @@ export default function DashboardScreen() {
       if (error) throw error;
       setEquipment(data || []);
     } catch (err) {
-      console.error("fetchEquipment error", err);
       setEquipmentError(err);
       setEquipment([]);
     } finally {
@@ -356,8 +354,7 @@ export default function DashboardScreen() {
         "postgres_changes",
         { event: "*", schema: "public", table: "equipment" },
         (payload) => {
-          console.log("Equipment change:", payload);
-
+          // Handle equipment change payload from realtime subscription
           if (payload.eventType === "INSERT") {
             setEquipment((prev) => [...prev, payload.new]);
           } else if (payload.eventType === "UPDATE") {
@@ -380,8 +377,7 @@ export default function DashboardScreen() {
         "postgres_changes",
         { event: "*", schema: "public", table: "plc_parameters" },
         (payload) => {
-          console.log("PLC parameter change:", payload);
-
+          // Handle PLC parameter changes from realtime subscription
           if (payload.eventType === "UPDATE") {
             setEquipment((prev) =>
               prev.map((eq) =>

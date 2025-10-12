@@ -324,8 +324,8 @@ export default function KilnsScreen() {
               return paramData.equipment;
             }
             return kiln;
-          } catch (error) {
-            console.error(`Error fetching parameters for ${kiln.name}:`, error);
+          } catch (_) {
+            // Failed to fetch parameters for this kiln; swallow to avoid noisy logs in production
             return kiln;
           }
         })

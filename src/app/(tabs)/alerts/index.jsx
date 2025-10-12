@@ -311,7 +311,6 @@ function FilterButton({ active, onPress, children, count }) {
 }
 
 export default function AlertsScreen() {
-  console.log('AlertsScreen');
   const insets = useSafeAreaInsets();
   // router was unused; removed to satisfy lint
   const queryClient = useQueryClient();
@@ -330,20 +329,18 @@ export default function AlertsScreen() {
       // Query the `alerts` table in Supabase. Adjust selected columns if your schema differs.
       // Select all columns to avoid errors if the schema differs from assumptions.
       // We'll map the fields defensively below.
-      const { data: rows, error: supaError, status, statusText } = await supabase
+      const { data: rows, error: supaError } = await supabase
         .from("alerts")
         .select("*")
         .order("created_at", { ascending: false });
 
-      // Debug logging to help diagnose why alerts may not be returned
-      console.debug("Supabase alerts response:", { status, statusText, rows, supaError });
+  // Removed noisy debug logs in production; errors will be thrown below if present.
 
       if (supaError) {
         throw new Error(supaError.message || JSON.stringify(supaError));
       }
 
-      // Debug the keys of the first row so we can inspect the actual schema in the console
-      console.debug("Supabase alerts row keys:", rows && rows.length ? Object.keys(rows[0]) : []);
+  // Note: we intentionally avoid logging row keys here to reduce console noise.
 
       // Map DB rows to the shape this component expects (use several fallbacks to handle schema differences)
       return (rows || []).map((r) => ({
