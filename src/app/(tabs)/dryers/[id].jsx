@@ -230,9 +230,9 @@ export default function DryerDetailScreen() {
               const Icon =
                 param.parameter_name?.toLowerCase().includes("temp")
                   ? Wind
-                  : param.parameter_name?.toLowerCase().includes("humidity")
+                  : param.parameter_name?.toLowerCase().includes("humidite")
                   ? Droplets
-                  : param.parameter_name?.toLowerCase().includes("pressure")
+                  : param.parameter_name?.toLowerCase().includes("pression")
                   ? Gauge
                   : Activity;
 
